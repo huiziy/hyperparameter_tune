@@ -187,5 +187,5 @@ mean(Rsquared_rf_avg)
 
     ## [1] 0.8335155
 
-By tuning the hyperparameters, we achieve the new Rsquared of 83.35 %, almost 30 % improvement from the benchmark.
+By tuning the hyperparameters, we achieve the new Rsquared of 83.35 %, over 30 % improvement from the benchmark.
 ------------------------------------------------------------------------------------------------------------------
