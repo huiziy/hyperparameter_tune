@@ -3,7 +3,7 @@ HYPERPARAMETER TUNING
 Huizi Yu
 9/24/2019
 
-From the previous section, we found the largest Rsquared 53.1% is achieved when we remove 3000 data points using SOD outlier removal method (5 folds cross validation). For this section, we first remove said 3000 outliers and attempt to tune the hyperparameter in random forest.
+From the previous section, we found the largest Rsquared 51.167% is achieved when we remove 2450 data points using SOD outlier removal method (5 folds cross validation). Removing more data points will lead to fluctuation around the 50% mark. For this section, we first remove said 2450 outliers and attempt to tune the hyperparameter in random forest. More specifically, we attempt to tune the following four parameters: number of trees, mtry (number of variables available for splitting at each tree node), maximum number of nodes, and sample fraction used to grow the forest (the rest is used to calculate Out-Of-Bag Error).
 
 Loading Concrete Data into workplace
 ------------------------------------
@@ -87,7 +87,7 @@ input2 <- scale(input)
 complete <- cbind(input2, concrete$overdesign)
 concrete2 <- as.data.frame(complete) 
 colnames(concrete2) <- c("coarse_agg_weight", "fine_agg_weight", "current_weight", "fly_ash_weight", "AEA_dose", "type_awra_dose", "weight_ratio", "target", "overdesign")
-concrete2[order(SOD, decreasing = TRUE)[1:3000],"Ind"] <- "Outlier"
+concrete2[order(SOD, decreasing = TRUE)[1:2450],"Ind"] <- "Outlier"
 concrete2[is.na(concrete2$Ind),"Ind"] <- "Inlier"
 train_sov <- subset(concrete2, concrete2$Ind == "Inlier")
 ```
@@ -104,8 +104,8 @@ for (j in 1:5) {
   train <-train_sov[samp,]
   test <- train_sov[-samp,]
   mu <- mean(test$overdesign)
-  tree_abod <- randomForest(y = train$overdesign , x = train[,1:8], ntree = 500, importance = TRUE)
-  rf.pred_abod <- predict(tree_abod, newdata =as.matrix(test[,1:8]))
+  tree_abod <- randomForest(y = train$overdesign , x = train[,1:7], ntree = 500, importance = TRUE)
+  rf.pred_abod <- predict(tree_abod, newdata =as.matrix(test[,1:7]))
   Rsquared_abod_1 <- 1 - (sum((test$overdesign - rf.pred_abod)^2)/sum((test$overdesign - mu)^2))
   Rsquared_rf_avg[j] = Rsquared_abod_1
 }
@@ -113,12 +113,14 @@ for (j in 1:5) {
 mean(Rsquared_rf_avg)
 ```
 
-    ## [1] 0.5317221
+    ## [1] 0.5116779
 
 Hyperparameter tuning using "ranger" function (due to its fast computational speed)
 -----------------------------------------------------------------------------------
 
 ### (a) mtry: number of variables tried at individual tree
+
+### (b) num\_trees: the number of trees in each random forest
 
 ### (b) node\_size: maximum number of node
 
@@ -126,7 +128,8 @@ Hyperparameter tuning using "ranger" function (due to its fast computational spe
 
 ``` r
 hyper_grid <- expand.grid(
-  mtry       = seq(1, 8, by = 1),
+  num_trees  = c(300,500,800,1000),
+  mtry       = seq(1, 7, by = 1),
   node_size  = seq(3, 9, by = 2),
   sampe_size = c(.55, .632, .70, .80),
   OOB_RMSE   = 0
@@ -135,9 +138,9 @@ hyper_grid <- expand.grid(
 for(i in 1:nrow(hyper_grid)) {
   # train model
   model <- ranger(
-    formula         = overdesign~., 
+    formula         = overdesign~coarse_agg_weight+fine_agg_weight+current_weight+fly_ash_weight+AEA_dose+type_awra_dose+weight_ratio, 
     data            = train_sov, 
-    num.trees       = 500,
+    num.trees       = hyper_grid$num_trees[i],
     mtry            = hyper_grid$mtry[i],
     min.node.size   = hyper_grid$node_size[i],
     sample.fraction = hyper_grid$sampe_size[i],
@@ -152,40 +155,41 @@ ordered <- hyper_grid[order(hyper_grid$OOB_RMSE),]
 ordered[1,]
 ```
 
-    ##     mtry node_size sampe_size  OOB_RMSE
-    ## 116    4         7        0.8 0.1436468
+    ##     num_trees mtry node_size sampe_size  OOB_RMSE
+    ## 152      1000    3         5      0.632 0.1481207
 
 Testing the tuned random forest on testing data set using five fold cross validation
 ------------------------------------------------------------------------------------
 
 ``` r
-Rsquared_rf_avg <- c(NA, NA, NA, NA, NA)
+Rsquared_rf_avg_tuned <- c(NA, NA, NA, NA, NA)
 
 for (j in 1:5) {
   set.seed(1234567+j*1000) 
   samp<-sample(1:nrow(train_sov),nrow(train_sov)*0.8,replace = F)
   train <-train_sov[samp,]
   test <- train_sov[-samp,]
+  test_x <- test[,1:7]
   mu <- mean(test$overdesign)
   tree_abod <- ranger(
-    formula         = overdesign~., 
-    data            = train_sov, 
-    num.trees       = 500,
-    mtry            = 4,
-    min.node.size   = 7,
-    sample.fraction = 0.8,
+    formula         = overdesign~coarse_agg_weight+fine_agg_weight+current_weight+fly_ash_weight+AEA_dose+type_awra_dose+weight_ratio, 
+    data            = train, 
+    num.trees       = 1000,
+    mtry            = 3,
+    min.node.size   = 5,
+    sample.fraction = 0.632,
     seed            = 1234567
   )
   
-  rf.pred_abod <- predict(tree_abod, data = test)
+  rf.pred_abod <- predict(tree_abod, data = test_x)
   Rsquared_abod_1 <- 1 - (sum((test$overdesign - rf.pred_abod$predictions)^2)/sum((test$overdesign - mu)^2))
-  Rsquared_rf_avg[j] = Rsquared_abod_1
+  Rsquared_rf_avg_tuned[j] = Rsquared_abod_1
 }
 
-mean(Rsquared_rf_avg)
+mean(Rsquared_rf_avg_tuned)
 ```
 
-    ## [1] 0.8335155
+    ## [1] 0.5128897
 
-By tuning the hyperparameters, we achieve the new Rsquared of 83.35 %, almost 30 % improvement from the benchmark.
-------------------------------------------------------------------------------------------------------------------
+By tuning the hyperparameters, we achieve the new Rsquared of 51.28897%, which is a very minor improvement comparing to the benchmark 51.16779% (after outlier removal).
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------
