@@ -1,6 +1,6 @@
 HYPERPARAMETER TUNING
 ================
-Huizi Yu
+Huizi (Angela) Yu
 9/24/2019
 
 From the previous section, we found the largest Rsquared 53.1% is achieved when we remove 3000 data points using SOD outlier removal method (5 folds cross validation). For this section, we first remove said 3000 outliers and attempt to tune the hyperparameter in random forest.
